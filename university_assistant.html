@@ -2454,6 +2454,175 @@
         }, 1000);
 
         console.log('МАДИ University Assistant инициализирован!');
+        // ЗАГЛУШКИ ДЛЯ API (для демонстрации)
+// Добавьте этот код в самый конец файла перед </script>
+
+// Mock данные для демонстрации
+const mockGroups = ['1МТ1', '1МТ2', '1МТ3', '2МТ1', '2МТ2', '3МТ1', '3МТ2', '4МТ1'];
+const mockOrders = [];
+let orderIdCounter = 1;
+
+// Переопределяем fetch для обработки API запросов
+const originalFetch = window.fetch;
+window.fetch = function(url, options = {}) {
+    // Имитируем задержку сети
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            // Обрабатываем разные эндпоинты
+            if (url === '/api/groups') {
+                resolve({
+                    ok: true,
+                    json: () => Promise.resolve(mockGroups)
+                });
+            }
+            else if (url.startsWith('/api/schedule/')) {
+                const group = url.split('/').pop();
+                resolve({
+                    ok: true,
+                    json: () => Promise.resolve(generateMockSchedule(group))
+                });
+            }
+            else if (url === '/api/order' && options.method === 'POST') {
+                const orderData = JSON.parse(options.body);
+                const newOrder = {
+                    order_id: orderIdCounter++,
+                    ...orderData,
+                    status: 'ожидает оценки',
+                    created_at: new Date().toISOString(),
+                    price: null
+                };
+                mockOrders.push(newOrder);
+                resolve({
+                    ok: true,
+                    json: () => Promise.resolve(newOrder)
+                });
+            }
+            else if (url === '/api/orders') {
+                resolve({
+                    ok: true,
+                    json: () => Promise.resolve(mockOrders)
+                });
+            }
+            else if (url.startsWith('/api/order/') && !url.includes('/pay') && !url.includes('/set_price') && !url.includes('/complete')) {
+                const orderId = parseInt(url.split('/').pop());
+                const order = mockOrders.find(o => o.order_id === orderId);
+                resolve({
+                    ok: !!order,
+                    json: () => Promise.resolve(order || {})
+                });
+            }
+            else if (url.startsWith('/api/chat/')) {
+                resolve({
+                    ok: true,
+                    json: () => Promise.resolve([])
+                });
+            }
+            else if (url === '/api/ai/chat' && options.method === 'POST') {
+                const data = JSON.parse(options.body);
+                resolve({
+                    ok: true,
+                    json: () => Promise.resolve({
+                        reply: generateAIResponse(data.message)
+                    })
+                });
+            }
+            else if (url.startsWith('/api/admin/orders')) {
+                resolve({
+                    ok: true,
+                    json: () => Promise.resolve({
+                        total: mockOrders.length,
+                        pending: mockOrders.filter(o => o.status === 'ожидает оценки').length,
+                        waiting_payment: mockOrders.filter(o => o.status === 'ожидает оплаты').length,
+                        paid: mockOrders.filter(o => o.status === 'оплачен').length,
+                        completed: mockOrders.filter(o => o.status === 'завершен').length,
+                        orders: mockOrders
+                    })
+                });
+            }
+            else {
+                // Для всех остальных запросов используем оригинальный fetch
+                originalFetch(url, options).then(resolve);
+            }
+        }, 500); // Имитируем задержку сети 500ms
+    });
+};
+
+// Генерация mock расписания
+function generateMockSchedule(group) {
+    const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
+    const subjects = [
+        'Математика', 'Физика', 'Информатика', 'Программирование', 
+        'Базы данных', 'Веб-разработка', 'Алгоритмы', 'Сети'
+    ];
+    const teachers = ['Иванов А.А.', 'Петрова С.И.', 'Сидоров В.В.', 'Козлова М.П.'];
+    const rooms = ['101', '202', '303', '404', '505'];
+    const times = ['9:00-10:30', '10:45-12:15', '13:00-14:30', '14:45-16:15', '16:30-18:00'];
+
+    const schedule = {
+        числитель: [],
+        знаменатель: []
+    };
+
+    days.forEach(day => {
+        const dayLessons = [];
+        const lessonCount = Math.floor(Math.random() * 3) + 3; // 3-5 пар в день
+
+        for (let i = 0; i < lessonCount; i++) {
+            const progress = Math.random() > 0.7 ? Math.floor(Math.random() * 100) : 0;
+            dayLessons.push({
+                time: times[i],
+                subject: subjects[Math.floor(Math.random() * subjects.length)],
+                teacher: teachers[Math.floor(Math.random() * teachers.length)],
+                room: rooms[Math.floor(Math.random() * rooms.length)],
+                type: ['Лекция', 'Практика', 'Лабораторная'][Math.floor(Math.random() * 3)],
+                progress: progress
+            });
+        }
+
+        schedule.числитель.push({
+            day: day,
+            date: new Date().toLocaleDateString('ru-RU'),
+            lessons: dayLessons
+        });
+
+        schedule.знаменатель.push({
+            day: day,
+            date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('ru-RU'),
+            lessons: dayLessons.map(lesson => ({
+                ...lesson,
+                progress: 0 // Сбрасываем прогресс для знаменателя
+            }))
+        });
+    });
+
+    return schedule;
+}
+
+// Генерация ответов AI-ассистента
+function generateAIResponse(message) {
+    const lowerMessage = message.toLowerCase();
+    
+    if (lowerMessage.includes('расписание') || lowerMessage.includes('пары')) {
+        return 'Расписание занятий доступно в соответствующем разделе. Выберите вашу группу для просмотра актуального расписания на текущую неделю.';
+    }
+    else if (lowerMessage.includes('заказ') || lowerMessage.includes('работа')) {
+        return 'Для заказа учебной работы перейдите в раздел "Заказ работы", заполните форму и наш менеджер свяжется с вами в ближайшее время.';
+    }
+    else if (lowerMessage.includes('deadline') || lowerMessage.includes('срок')) {
+        return 'Стандартные сроки выполнения работ - от 3 до 14 дней в зависимости от сложности. Срочные заказы обсуждаются индивидуально с менеджером.';
+    }
+    else if (lowerMessage.includes('цена') || lowerMessage.includes('стоимость')) {
+        return 'Стоимость работы зависит от сложности, объема и сроков выполнения. После оценки заказа менеджер сообщит точную цену.';
+    }
+    else if (lowerMessage.includes('мади') || lowerMessage.includes('универ')) {
+        return 'МАДИ - Московский автомобильно-дорожный государственный технический университет. Официальный сайт: madi.ru';
+    }
+    else {
+        return 'Я AI-ассистент МАДИ. Могу помочь с вопросами о расписании, заказе учебных работ и учебном процессе. Задайте ваш вопрос!';
+    }
+}
+
+console.log('Mock API подключен! Сайт теперь должен работать в демо-режиме.');
     </script>
 </body>
 </html>
